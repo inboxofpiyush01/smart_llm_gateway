@@ -26,13 +26,12 @@ Gemini is intentionally placed after the faster free/free-trial providers becaus
 
 ## Files
 
-- `fixed_streamlit_gateway.py` - main Streamlit app.
+- `app.py` - main Streamlit app.
 - `gateway_final_v3.json` - local telemetry state file created at runtime.
 - `linkedin_article_free_first_llms.md` - short LinkedIn article draft.
-- `demo_screen_recording_script.md` - 3-4 minute demo narration script.
 - `free_first_llm_linkedin_cover.png` - LinkedIn cover image.
-- `free_first_llm_routing_architecture.svg` - routing concept diagram.
-- `free_first_llm_cost_control_loop.svg` - token-cost concept diagram.
+- 'img2` - routing concept diagram.
+- `img1` - token-cost concept diagram.
 
 ## Setup
 

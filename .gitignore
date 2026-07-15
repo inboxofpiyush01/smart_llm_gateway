@@ -10,9 +10,9 @@ env/
 ENV/
 
 # Environment and secrets
-.env
-.env.*
-!.env.example
+#.env
+#.env.*
+#!.env.example
 
 # Streamlit
 .streamlit/secrets.toml

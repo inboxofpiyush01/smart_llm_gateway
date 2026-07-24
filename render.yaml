@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: smart-llm-gateway
+    runtime: docker
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: PORT
+        value: "8501"

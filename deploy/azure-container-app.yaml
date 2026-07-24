@@ -1,0 +1,12 @@
+properties:
+  configuration:
+    ingress:
+      external: true
+      targetPort: 8501
+  template:
+    containers:
+      - name: smart-llm-gateway
+        image: piyushdocker90/smart-llm-gateway:latest
+        env:
+          - name: PORT
+            value: "8501"

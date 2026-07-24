@@ -18,6 +18,6 @@ jobs:
           context: .
           push: false
           platforms: linux/amd64
-          tags: anycloud/smart-llm-gateway:ci
+          tags: anycloud/smart_llm_gateway:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max

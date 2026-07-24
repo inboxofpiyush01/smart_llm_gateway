@@ -20,4 +20,4 @@ EXPOSE ${APP_PORT}
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD python -c "import os,socket; p=int(os.environ.get('PORT','8501')); s=socket.socket(); s.settimeout(2); s.connect(('127.0.0.1',p))" || exit 1
 
-CMD ["sh","-c","exec streamlit run \"app.py\" --server.port=${PORT:-8501} --server.address=0.0.0.0"]
+CMD ["sh","-c","exec streamlit run \"app.py\" --server.port=${PORT:-8501} --server.address=0.0.0.0 --server.headless=true --server.enableCORS=false --server.enableXsrfProtection=false"]

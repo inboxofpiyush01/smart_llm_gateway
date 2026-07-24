@@ -1,10 +1,10 @@
 services:
-  smart-llm-gateway:
+  smart_llm_gateway:
     build:
       context: .
       args:
         APP_PORT: ${PORT:-8501}
-    container_name: smart-llm-gateway-app
+    container_name: smart_llm_gateway-app
     restart: unless-stopped
     environment:
       PORT: ${PORT:-8501}

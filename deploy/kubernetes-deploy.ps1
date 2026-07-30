@@ -119,9 +119,9 @@ if ($Mode -eq 'production') {
   Write-Host '[1/7] Try pulling existing registry image (skip rebuild when already published)'
   docker pull $Image 2>&1 | Out-Host
   if ($LASTEXITCODE -eq 0) {
-    Write-Host ('Pulled existing image ' + $Image + ' — build skipped to save time and bandwidth.') -ForegroundColor Green
+    Write-Host ('Pulled existing image ' + $Image + ' - build skipped to save time and bandwidth.') -ForegroundColor Green
   } else {
-    Write-Host 'Image not found in registry (or not accessible). Building and pushing a new image…' -ForegroundColor Yellow
+    Write-Host 'Image not found in registry (or not accessible). Building and pushing a new image...' -ForegroundColor Yellow
     Write-Host '[1b/7] Build optimized container image'
     docker build --pull --build-arg APP_PORT=$ContainerPort -t $Image .
     if ($LASTEXITCODE -ne 0) { Fail 'docker build failed.' }
@@ -135,20 +135,34 @@ if ($Mode -eq 'production') {
   if ($LASTEXITCODE -ne 0) { Fail 'docker build failed.' }
   Write-Host '[2/7] Local image ready (push skipped for local mode)'
 }
-docker manifest inspect $Image 1>$null 2>$null
-if ($LASTEXITCODE -ne 0) { Fail ('The pushed image is not readable from the configured registry: ' + $Image) }
+# Registry reachability: prefer docker image inspect (local after pull) over manifest inspect (often fails on Docker Desktop)
+docker image inspect $Image 1>$null 2>$null
+if ($LASTEXITCODE -ne 0) {
+  docker manifest inspect $Image 1>$null 2>$null
+  if ($LASTEXITCODE -ne 0) { Fail ('Image not readable locally or in registry: ' + $Image) }
+}
 Write-Host '[3/7] Validate manifests against the selected cluster'
-$RenderedDeployment = & kubectl @script:KubeBase set image -f 'k8s/deployment.yaml' ($Name + '=' + $Image) --local -o yaml
-if ($LASTEXITCODE -ne 0 -or -not $RenderedDeployment) { Fail 'Could not render the Deployment with the resolved registry image.' }
-$RenderedDeployment | & kubectl @script:KubeBase apply --dry-run=server -n $Namespace -f -
-if ($LASTEXITCODE -ne 0) { Fail 'Server-side Deployment validation failed.' }
-Kube apply --dry-run=server -n $Namespace @ManifestArgs
-if ($LASTEXITCODE -ne 0) { Fail 'Server-side manifest validation failed.' }
+if (-not (Test-Path -LiteralPath 'k8s/deployment.yaml')) { Fail 'k8s/deployment.yaml is missing. Analyze Project, then Save.' }
+# Reliable image injection: rewrite image: lines in the Deployment YAML (avoids kubectl set image --local failures on Windows)
+$DeployYaml = Get-Content -LiteralPath 'k8s/deployment.yaml' -Raw
+if ([string]::IsNullOrWhiteSpace($DeployYaml)) { Fail 'k8s/deployment.yaml is empty.' }
+if ($DeployYaml -notmatch '(?m)^s*image:s*') { Fail 'k8s/deployment.yaml has no image: field to update.' }
+$RenderedDeployment = [regex]::Replace($DeployYaml, '(?m)^(s*image:s*)S+', ('$1' + $Image))
+if ($RenderedDeployment -notmatch [regex]::Escape($Image)) { Fail ('Failed to inject image ' + $Image + ' into Deployment YAML.') }
+$tmpDeploy = Join-Path $env:TEMP ('anycloud-deploy-' + $Name + '.yaml')
+Set-Content -LiteralPath $tmpDeploy -Value $RenderedDeployment -Encoding utf8
+Write-Host ('Using image ' + $Image + ' in Deployment')
+$dry = & kubectl @script:KubeBase apply --dry-run=server -n $Namespace -f $tmpDeploy 2>&1
+Write-Host $dry
+if ($LASTEXITCODE -ne 0) { Fail ('Server-side Deployment validation failed: ' + $dry) }
+Kube apply --dry-run=server -n $Namespace @ManifestArgs 2>&1 | Out-Host
+if ($LASTEXITCODE -ne 0) { Fail 'Server-side validation of Service/ConfigMap/HPA manifests failed.' }
 Write-Host '[4/7] Create or update Kubernetes resources'
-Kube apply -n $Namespace @ManifestArgs
-if ($LASTEXITCODE -ne 0) { Fail 'kubectl apply failed.' }
-$RenderedDeployment | & kubectl @script:KubeBase apply -n $Namespace -f -
+Kube apply -n $Namespace @ManifestArgs 2>&1 | Out-Host
+if ($LASTEXITCODE -ne 0) { Fail 'kubectl apply of Service/ConfigMap/HPA failed.' }
+& kubectl @script:KubeBase apply -n $Namespace -f $tmpDeploy 2>&1 | Out-Host
 if ($LASTEXITCODE -ne 0) { Fail 'Could not create/update the Deployment.' }
+Remove-Item -LiteralPath $tmpDeploy -Force -ErrorAction SilentlyContinue
 $script:DeploymentMutated = $True
 if ($Mode -eq 'production' -and $Exposure -eq 'loadbalancer') { Kube delete ingress $Name -n $Namespace --ignore-not-found 1>$null 2>$null }
 Kube rollout restart ('deployment/' + $Name) -n $Namespace

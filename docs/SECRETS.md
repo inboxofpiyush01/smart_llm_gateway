@@ -1,6 +1,6 @@
 AnyCloud secret protection
 ==========================
-1. scripts/scan-secrets.ps1 — run: powershell -File scripts/scan-secrets.ps1
+1. scripts/scan-secrets.ps1 - run: powershell -File scripts/scan-secrets.ps1
 2. Enable hook (once per clone):
    git config core.hooksPath .githooks
 3. API keys belong only in AnyCloud Runtime API keys & secrets (session).

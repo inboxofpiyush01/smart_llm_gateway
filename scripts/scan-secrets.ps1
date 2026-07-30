@@ -1,4 +1,4 @@
-# AnyCloud Studio — local secret scan (blocks commit if secrets found)
+# AnyCloud Studio - local secret scan (blocks commit if secrets found)
 $ErrorActionPreference = 'Stop'
 $root = (Get-Location).Path
 if ($PSScriptRoot) { $candidate = Split-Path $PSScriptRoot -Parent; if (Test-Path (Join-Path $candidate 'Dockerfile')) { $root = $candidate } }
@@ -37,7 +37,7 @@ foreach ($f in $files) {
   }
 }
 if ($hits.Count -gt 0) {
-  Write-Host 'AnyCloud secret scan FAILED — commit blocked:' -ForegroundColor Red
+  Write-Host 'AnyCloud secret scan FAILED - commit blocked:' -ForegroundColor Red
   $hits | ForEach-Object { Write-Host ('  ' + $_) -ForegroundColor Yellow }
   Write-Host 'Move secrets to Runtime API keys & secrets (session-only). Do not commit them.' -ForegroundColor Yellow
   exit 1

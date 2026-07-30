@@ -1,0 +1,25 @@
+AnyCloud Studio - Kubernetes deployment modes
+
+LOCAL KUBERNETES (existing behavior)
+Docker Desktop -> Kubernetes -> Create/Enable cluster -> wait for Running.
+kubectl config use-context docker-desktop
+Select Kubernetes in AnyCloud Studio, then Analyze, Save, Check readiness and Deploy.
+A localhost/port-forward URL is expected.
+
+PRODUCTION KUBERNETES
+1. Connect an existing managed cluster with its official cloud CLI.
+2. Click Discover clusters and explicitly select the intended production context.
+3. Choose a named registry provider. Only its required fields are shown.
+4. Tokens/passwords are entered in the session-only field and never saved in generated files.
+5. Choose LoadBalancer or Ingress, optional namespace creation, ConfigMap values, and autoscaling.
+6. Analyze, Save, Check readiness and Deploy. AnyCloud generates and applies all YAML.
+
+Existing managed-cluster kubeconfig examples:
+Amazon EKS: aws eks update-kubeconfig --region REGION --name CLUSTER --profile PROFILE
+Azure AKS: az aks get-credentials --resource-group GROUP --name CLUSTER
+Google GKE: gcloud container clusters get-credentials CLUSTER --location LOCATION --project PROJECT
+DigitalOcean: doctl kubernetes cluster kubeconfig save CLUSTER
+
+The production deploy script always uses --kubeconfig/--context arguments. It never changes the global current context.
+It waits for rollout, Pods, Service, public endpoint and HTTP health; failures print diagnostics and attempt rollback.
+The same provider-neutral flow works with EKS, AKS, GKE, DigitalOcean and other conformant Kubernetes clusters.

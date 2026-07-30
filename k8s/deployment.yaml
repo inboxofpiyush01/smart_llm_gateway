@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: smart-llm-gateway
+  labels:
+    app.kubernetes.io/name: smart-llm-gateway
+    app.kubernetes.io/managed-by: anycloud-studio
+    app.kubernetes.io/environment: production
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: smart-llm-gateway
+  template:
+    metadata:
+      labels:
+        app: smart-llm-gateway
+        app.kubernetes.io/name: smart-llm-gateway
+    spec:
+      containers:
+        - name: smart-llm-gateway
+          image: piyushdocker90/smart-llm-gateway:latest
+          imagePullPolicy: Always
+          envFrom:
+            - secretRef:
+                name: smart-llm-gateway-api-keys
+                optional: true
+          env:
+            - name: PORT
+              value: "8501"
+          ports:
+            - name: http
+              containerPort: 8501
+              protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 12
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi

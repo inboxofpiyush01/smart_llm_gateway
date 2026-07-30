@@ -1,0 +1,10 @@
+#!/bin/sh
+# AnyCloud Studio pre-commit secret scan
+if command -v powershell.exe >/dev/null 2>&1; then
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "scripts/scan-secrets.ps1" || exit 1
+elif command -v pwsh >/dev/null 2>&1; then
+  pwsh -NoProfile -File "scripts/scan-secrets.ps1" || exit 1
+else
+  echo "Install PowerShell to run AnyCloud secret scan"
+  exit 1
+fi

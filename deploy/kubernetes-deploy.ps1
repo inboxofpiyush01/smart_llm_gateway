@@ -142,24 +142,82 @@ if ($LASTEXITCODE -ne 0) {
   if ($LASTEXITCODE -ne 0) { Fail ('Image not readable locally or in registry: ' + $Image) }
 }
 Write-Host '[3/7] Validate manifests against the selected cluster'
-if (-not (Test-Path -LiteralPath 'k8s/deployment.yaml')) { Fail 'k8s/deployment.yaml is missing. Analyze Project, then Save.' }
-# Reliable image injection: rewrite image: lines in the Deployment YAML (avoids kubectl set image --local failures on Windows)
-$DeployYaml = Get-Content -LiteralPath 'k8s/deployment.yaml' -Raw
-if ([string]::IsNullOrWhiteSpace($DeployYaml)) { Fail 'k8s/deployment.yaml is empty.' }
-if ($DeployYaml -notmatch '(?m)^s*image:s*') { Fail 'k8s/deployment.yaml has no image: field to update.' }
-$RenderedDeployment = [regex]::Replace($DeployYaml, '(?m)^(s*image:s*)S+', ('$1' + $Image))
-if ($RenderedDeployment -notmatch [regex]::Escape($Image)) { Fail ('Failed to inject image ' + $Image + ' into Deployment YAML.') }
+if (-not (Test-Path -LiteralPath 'k8s/deployment.yaml')) { Fail 'k8s/deployment.yaml is missing. Analyze Project, then Save Directly to Folder.' }
+$DeployYaml = Get-Content -LiteralPath 'k8s/deployment.yaml' -Raw -ErrorAction Stop
+if ([string]::IsNullOrWhiteSpace($DeployYaml)) { Fail 'k8s/deployment.yaml is empty. Analyze Project, then Save Directly to Folder.' }
+$imgPattern = '(?im)(^[ \t]*image:[ \t]*)([^\r\n]+)'
+if ([regex]::IsMatch($DeployYaml, $imgPattern)) {
+  $RenderedDeployment = [regex]::Replace($DeployYaml, $imgPattern, ('${1}' + $Image))
+} else {
+  Write-Host 'WARNING: No image: field in local k8s/deployment.yaml - building Deployment from parameters.' -ForegroundColor Yellow
+  $RenderedDeployment = @(
+    'apiVersion: apps/v1',
+    'kind: Deployment',
+    'metadata:',
+    ('  name: ' + $Name),
+    '  labels:',
+    ('    app.kubernetes.io/name: ' + $Name),
+    '    app.kubernetes.io/managed-by: anycloud-studio',
+    'spec:',
+    '  replicas: 1',
+    '  selector:',
+    '    matchLabels:',
+    ('      app: ' + $Name),
+    '  template:',
+    '    metadata:',
+    '      labels:',
+    ('        app: ' + $Name),
+    '    spec:',
+    '      containers:',
+    ('        - name: ' + $Name),
+    ('          image: ' + $Image),
+    '          imagePullPolicy: Always',
+    '          envFrom:',
+    '            - secretRef:',
+    ('                name: ' + $Name + '-api-keys'),
+    '                optional: true',
+    '          env:',
+    '            - name: PORT',
+    ('              value: "' + $ContainerPort + '"'),
+    '          ports:',
+    '            - name: http',
+    ('              containerPort: ' + $ContainerPort),
+    '              protocol: TCP',
+    '          readinessProbe:',
+    '            tcpSocket:',
+    '              port: http',
+    '            initialDelaySeconds: 10',
+    '            periodSeconds: 10',
+    '          livenessProbe:',
+    '            tcpSocket:',
+    '              port: http',
+    '            initialDelaySeconds: 30',
+    '            periodSeconds: 20',
+    '          resources:',
+    '            requests:',
+    '              cpu: 100m',
+    '              memory: 128Mi',
+    '            limits:',
+    '              cpu: "1"',
+    '              memory: 1Gi'
+  ) -join [char]10
+}
+if ($RenderedDeployment -notlike ('*' + $Image + '*')) { Fail ('Image ' + $Image + ' was not present in the rendered Deployment.') }
 $tmpDeploy = Join-Path $env:TEMP ('anycloud-deploy-' + $Name + '.yaml')
-Set-Content -LiteralPath $tmpDeploy -Value $RenderedDeployment -Encoding utf8
+try { Set-Content -LiteralPath $tmpDeploy -Value $RenderedDeployment -Encoding utf8NoBOM -ErrorAction Stop } catch { Set-Content -LiteralPath $tmpDeploy -Value $RenderedDeployment -Encoding utf8 }
 Write-Host ('Using image ' + $Image + ' in Deployment')
 $dry = & kubectl @script:KubeBase apply --dry-run=server -n $Namespace -f $tmpDeploy 2>&1
-Write-Host $dry
-if ($LASTEXITCODE -ne 0) { Fail ('Server-side Deployment validation failed: ' + $dry) }
-Kube apply --dry-run=server -n $Namespace @ManifestArgs 2>&1 | Out-Host
-if ($LASTEXITCODE -ne 0) { Fail 'Server-side validation of Service/ConfigMap/HPA manifests failed.' }
+$dry | ForEach-Object { Write-Host $_ }
+if ($LASTEXITCODE -ne 0) { Fail ('Server-side Deployment validation failed: ' + ($dry | Out-String)) }
+if ($ManifestArgs -and $ManifestArgs.Count -gt 0) {
+  Kube apply --dry-run=server -n $Namespace @ManifestArgs 2>&1 | Out-Host
+  if ($LASTEXITCODE -ne 0) { Fail 'Server-side validation of Service/ConfigMap/HPA manifests failed.' }
+}
 Write-Host '[4/7] Create or update Kubernetes resources'
-Kube apply -n $Namespace @ManifestArgs 2>&1 | Out-Host
-if ($LASTEXITCODE -ne 0) { Fail 'kubectl apply of Service/ConfigMap/HPA failed.' }
+if ($ManifestArgs -and $ManifestArgs.Count -gt 0) {
+  Kube apply -n $Namespace @ManifestArgs 2>&1 | Out-Host
+  if ($LASTEXITCODE -ne 0) { Fail 'kubectl apply of Service/ConfigMap/HPA failed.' }
+}
 & kubectl @script:KubeBase apply -n $Namespace -f $tmpDeploy 2>&1 | Out-Host
 if ($LASTEXITCODE -ne 0) { Fail 'Could not create/update the Deployment.' }
 Remove-Item -LiteralPath $tmpDeploy -Force -ErrorAction SilentlyContinue
